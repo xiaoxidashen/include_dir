@@ -99,8 +99,19 @@ fn expand_file(root: &Path, path: &Path) -> proc_macro2::TokenStream {
 
     let normalized_path = normalize_path(root, path);
 
+    #[cfg(not(debug_assertions))]
     let tokens = quote! {
         include_dir::File::new(#normalized_path, #literal)
+    };
+
+    #[cfg(debug_assertions)]
+    let tokens = if root.to_str().is_some() {
+        let r = root.to_str().unwrap();
+            quote! {
+            include_dir::File::new(#normalized_path, #literal, #r)
+        }
+    } else {
+        panic!("root.to_str().is_none()")
     };
 
     match metadata(path) {

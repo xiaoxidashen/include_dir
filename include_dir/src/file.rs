@@ -21,16 +21,23 @@ pub struct File<'a> {
     contents: &'a [u8],
     #[cfg(feature = "metadata")]
     metadata: Option<crate::Metadata>,
+    #[cfg(debug_assertions)]
+    prefix: &'a str,
 }
 
 impl<'a> File<'a> {
     /// Create a new [`File`].
-    pub const fn new(path: &'a str, contents: &'a [u8]) -> Self {
+    pub const fn new(path: &'a str, contents: &'a [u8],
+                     #[cfg(debug_assertions)]
+                     prefix: &'a str,
+    ) -> Self {
         File {
             path,
             contents,
             #[cfg(feature = "metadata")]
             metadata: None,
+            #[cfg(debug_assertions)]
+            prefix,
         }
     }
 
@@ -46,7 +53,9 @@ impl<'a> File<'a> {
         {
             let mut cache = FILES_CACHE.lock().unwrap();
             if !cache.contains_key(self.path) {
-                let value = Box::leak(std::fs::read(self.path().to_str().unwrap()).unwrap().into_boxed_slice());
+                let real_path = self.prefix.to_string().clone() + std::path::MAIN_SEPARATOR.to_string().as_str() + self.path;
+                let real_path : &Path = Path::new(real_path.as_str());
+                let value = Box::leak(std::fs::read(real_path).unwrap().into_boxed_slice());
                 let key = Box::leak(self.path.to_string().into_boxed_str());
                 cache.insert(key, value);
             }
@@ -68,12 +77,17 @@ impl<'a> File<'a> {
 impl<'a> File<'a> {
     /// Set the [`Metadata`] associated with a [`File`].
     pub const fn with_metadata(self, metadata: crate::Metadata) -> Self {
-        let File { path, contents, .. } = self;
+        #[cfg(not(debug_assertions))]
+        let File { path, contents , .. } = self;
+        #[cfg(debug_assertions)]
+        let File { path, contents,prefix , .. } = self;
 
         File {
             path,
             contents,
             metadata: Some(metadata),
+            #[cfg(debug_assertions)]
+            prefix,
         }
     }
 
@@ -90,6 +104,8 @@ impl<'a> Debug for File<'a> {
             contents,
             #[cfg(feature = "metadata")]
             metadata,
+            #[cfg(debug_assertions)]
+            prefix,
         } = self;
 
         let mut d = f.debug_struct("File");
@@ -99,6 +115,9 @@ impl<'a> Debug for File<'a> {
 
         #[cfg(feature = "metadata")]
         d.field("metadata", metadata);
+
+        #[cfg(debug_assertions)]
+        d.field("prefix", prefix);
 
         d.finish()
     }
